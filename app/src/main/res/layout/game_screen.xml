@@ -1,0 +1,141 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".screens.GameScreen">
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/arFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <RelativeLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Home Button -->
+        <ImageView
+            android:id="@+id/home"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentStart="true"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/homebutton"
+            android:contentDescription="Home" />
+
+        <!-- FrameLayout to overlay TextView on top of the timer image -->
+        <FrameLayout
+            android:id="@+id/timerContainer"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:layout_marginEnd="20dp"
+            android:layout_marginTop="20dp">
+
+            <!-- Timer Image -->
+            <ImageView
+                android:id="@+id/timer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter"
+                android:src="@drawable/timer"
+                android:contentDescription="Timer" />
+
+            <!-- Centered TextView on top of Image -->
+            <TextView
+                android:id="@+id/timerText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="0"
+                android:textColor="#FF0000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+    </RelativeLayout>
+
+    <LinearLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/scoreContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_gravity="center">
+
+        <ImageView
+            android:id="@+id/starsbanner"
+            android:layout_width="260dp"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/endscreenstars"
+            android:contentDescription="Banner"
+            android:visibility="gone"
+            />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="20dp" />
+
+
+        <ImageView
+            android:id="@+id/congrats"
+            android:layout_width="wrap_content"
+            android:layout_height="250dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/endscreenmain"
+            android:contentDescription="Congrats"
+            android:visibility="gone"
+
+            />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="20dp" />
+
+
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            >
+
+            <ImageView
+                android:id="@+id/gamescore"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter"
+                android:src="@drawable/scoreimage"
+                android:layout_alignParentBottom="true"
+                android:layout_alignParentEnd="true"
+                android:contentDescription="Score" />
+
+            <TextView
+                android:id="@+id/scoreText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:layout_alignEnd="@+id/gamescore"
+                android:layout_alignBottom="@id/gamescore"
+                android:layout_marginEnd="15dp"
+                android:layout_marginBottom="14dp"
+                />
+        </RelativeLayout>
+
+        <!-- ImageView at bottom-end -->
+    </LinearLayout>
+
+</FrameLayout>
