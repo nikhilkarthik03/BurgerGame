@@ -46,7 +46,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".screens.GameScreen" />
+<!--        <activity android:name=".screens.GameScreen" />-->
 
     </application>
 
