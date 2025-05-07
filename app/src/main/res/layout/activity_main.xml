@@ -32,6 +32,24 @@
         android:visibility="gone">
 
         <ImageView
+            android:id="@+id/nextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="60dp"
+            android:contentDescription="Next Button"
+            android:src="@drawable/next_button"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="60dp" />
+
+    </FrameLayout>
+
+    <!-- SELECTION View -->
+    <FrameLayout
+        android:id="@+id/selectionView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <ImageView
             android:id="@+id/startButton"
             android:layout_width="wrap_content"
             android:layout_height="60dp"
@@ -48,7 +66,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="20sp"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <RelativeLayout
             android:layout_width="match_parent"

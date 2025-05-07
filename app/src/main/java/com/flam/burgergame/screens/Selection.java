@@ -17,7 +17,7 @@ import com.google.ar.sceneform.animation.ModelAnimator;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Instructions {
+public class Selection {
 
     private ArFragment arFragment;
     private Context context;
@@ -26,7 +26,7 @@ public class Instructions {
 
     private float scale = 2.5f;
 
-    public Instructions(Context context, ArFragment arFragment) {
+    public Selection(Context context, ArFragment arFragment) {
         this.context = context;
         this.arFragment = arFragment;
         this.eventEmitter = EventEmitter.getInstance();
@@ -34,7 +34,7 @@ public class Instructions {
 
     public void loadModels() {
         // Emit event that model loading started
-        eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "instructions_fries");
+        eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "selection_tray");
 
         ModelRenderable.builder()
                 .setSource(context, Uri.parse("models/Fries_Popin_Animation.glb"))
@@ -81,7 +81,7 @@ public class Instructions {
                     }
 
                     // Emit event that model is loaded and placed in scene
-                    eventEmitter.emit(GameEvents.MODEL_LOADED, "instructions_fries");
+                    eventEmitter.emit(GameEvents.MODEL_LOADED, "selection_tray");
                 })
                 .exceptionally(throwable -> {
                     String errorMsg = "Failed to load models/Fries_Popin_Animation.glb";
