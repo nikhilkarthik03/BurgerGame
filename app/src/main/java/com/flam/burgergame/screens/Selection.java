@@ -7,6 +7,7 @@ import android.widget.Toast;
 
 import com.flam.burgergame.utils.EventEmitter;
 import com.flam.burgergame.utils.GameEvents;
+import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.RenderableInstance;
@@ -19,12 +20,12 @@ import java.util.List;
 
 public class Selection {
 
-    private ArFragment arFragment;
-    private Context context;
-    private EventEmitter eventEmitter;
-    private List<Node> sceneNodes = new ArrayList<>();
+    private final ArFragment arFragment;
+    private final Context context;
+    private final EventEmitter eventEmitter;
+    private final List<Node> sceneNodes = new ArrayList<>();
 
-    private float scale = 2.5f;
+    private final float scale = 1f;
 
     public Selection(Context context, ArFragment arFragment) {
         this.context = context;
@@ -37,7 +38,7 @@ public class Selection {
         eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "selection_tray");
 
         ModelRenderable.builder()
-                .setSource(context, Uri.parse("models/Fries_Popin_Animation.glb"))
+                .setSource(context, Uri.parse("models/prop_tray_with_burger.glb"))
                 .setIsFilamentGltf(true)
                 .setAsyncLoadEnabled(false)
                 .build()
@@ -47,8 +48,9 @@ public class Selection {
                     node.setParent(arFragment.getArSceneView().getScene());
                     node.setLocalScale(new Vector3(scale, scale, scale));
 
-                    // Add node to our tracking list
                     sceneNodes.add(node);
+
+                    Quaternion rotationZ = Quaternion.axisAngle(new Vector3(1, 0, 0), 90);
 
                     arFragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
                         // Get camera position and forward vector
@@ -59,8 +61,13 @@ public class Selection {
                         Vector3 targetPos = Vector3.add(cameraPos, cameraForward.scaled(1.0f));
                         node.setWorldPosition(targetPos);
 
-                        // Make node face the camera
+                        // Make node face the camera first
                         node.setLookDirection(Vector3.subtract(targetPos, cameraPos));
+
+                        // Then apply the additional 90-degree Z rotation by combining the quaternions
+                        Quaternion currentRotation = node.getWorldRotation();
+                        Quaternion combinedRotation = Quaternion.multiply(currentRotation, rotationZ);
+                        node.setWorldRotation(combinedRotation);
                     });
 
                     // Optional animation logic

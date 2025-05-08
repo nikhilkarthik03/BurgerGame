@@ -19,12 +19,12 @@ import java.util.List;
 
 public class Instructions {
 
-    private ArFragment arFragment;
-    private Context context;
-    private EventEmitter eventEmitter;
-    private List<Node> sceneNodes = new ArrayList<>();
+    private final ArFragment arFragment;
+    private final Context context;
+    private final EventEmitter eventEmitter;
+    private final List<Node> sceneNodes = new ArrayList<>();
 
-    private float scale = 2.5f;
+    private final float scale = 2.5f;
 
     public Instructions(Context context, ArFragment arFragment) {
         this.context = context;
@@ -37,7 +37,7 @@ public class Instructions {
         eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "instructions_fries");
 
         ModelRenderable.builder()
-                .setSource(context, Uri.parse("models/Fries_Popin_Animation.glb"))
+                .setSource(context, Uri.parse("models/Fries_Popin_Animation_V2.glb"))
                 .setIsFilamentGltf(true)
                 .setAsyncLoadEnabled(false)
                 .build()

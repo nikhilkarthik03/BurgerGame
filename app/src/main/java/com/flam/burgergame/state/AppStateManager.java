@@ -28,7 +28,7 @@ public class AppStateManager {
     private DisplayMetrics displayMetrics;
 
     // Map of state handlers for each app state
-    private Map<AppState, StateHandler> stateHandlers = new HashMap<>();
+    private final Map<AppState, StateHandler> stateHandlers = new HashMap<>();
     private StateHandler activeHandler = null;
 
     private AppStateManager() {

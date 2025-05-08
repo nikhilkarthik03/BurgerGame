@@ -52,11 +52,9 @@ public class MainActivity extends AppCompatActivity implements
 
         setContentView(R.layout.activity_main);
 
-        // Initialize state manager and event emitter
         stateManager = AppStateManager.getInstance();
         eventEmitter = EventEmitter.getInstance();
 
-        // Find views
         loadingLayout = findViewById(R.id.loadingView);
         instructionsLayout = findViewById(R.id.instructionsView);
         selectionLayout = findViewById(R.id.selectionView);
@@ -65,26 +63,20 @@ public class MainActivity extends AppCompatActivity implements
         startButton = findViewById(R.id.startButton);
         restartButton = findViewById(R.id.restartButton);
 
-        // Set up AR fragment
         getSupportFragmentManager().addFragmentOnAttachListener(this);
         launchArFragment();
 
-        // Create and register state handlers
         registerStateHandlers();
 
-        // Optional: Listen for state changes (for debugging or other cross-cutting concerns)
         setupStateChangeListener();
 
-        // Start with LOADING
         stateManager.setAppState(AppStateManager.AppState.LOADING);
 
-        // Automatically go to INSTRUCTIONS after 3 seconds
         new Handler().postDelayed(() ->
                 stateManager.setAppState(AppStateManager.AppState.INSTRUCTIONS), 3000);
     }
 
     private void registerStateHandlers() {
-        // Loading state handler
         stateManager.registerStateHandler(AppStateManager.AppState.LOADING, new StateHandler() {
             @Override
             public void activate() {
@@ -198,6 +190,7 @@ public class MainActivity extends AppCompatActivity implements
                     gameScreenManager = new GameScreen(MainActivity.this, arFragment);
                     gameScreenManager.startGameTimer(10);
                     gameScreenManager.loadModels();
+
                 }
 
                 // Set up restart button action
@@ -235,20 +228,14 @@ public class MainActivity extends AppCompatActivity implements
             }
         });
 
-        // You can add more state handlers here as your app grows
-        // For example:
-        /*
-        stateManager.registerStateHandler(AppStateManager.AppState.SELECTION, new SelectionStateHandler(this));
-        stateManager.registerStateHandler(AppStateManager.AppState.END, new EndStateHandler(this));
-        */
     }
 
     private void setupStateChangeListener() {
         stateChangeListener = (eventName, data) -> {
             if (eventName.equals(GameEvents.APP_STATE_CHANGED)) {
                 AppStateManager.StateChangeEvent event = (AppStateManager.StateChangeEvent) data;
+                assert event != null;
                 String stateChange = "State changed from " + event.getOldState() + " to " + event.getNewState();
-                // For debugging: Toast.makeText(MainActivity.this, stateChange, Toast.LENGTH_SHORT).show();
             }
         };
 
@@ -270,13 +257,10 @@ public class MainActivity extends AppCompatActivity implements
             arFragment.setOnSessionConfigurationListener(this);
             arFragment.setOnViewCreatedListener(this);
 
-            // Emit event that AR Fragment is ready
             eventEmitter.emit(GameEvents.AR_FRAGMENT_READY, arFragment);
 
-            // If we're in a state that needs the AR fragment, reactivate that state
             AppStateManager.AppState currentState = stateManager.getCurrentState();
             if (currentState != AppStateManager.AppState.LOADING) {
-                // This forces the state handler to reactivate with the AR fragment available
                 stateManager.setAppState(currentState);
             }
         }
@@ -295,17 +279,14 @@ public class MainActivity extends AppCompatActivity implements
         arFragment.setOnViewCreatedListener(null);
         arSceneView.setFrameRateFactor(ArSceneView.FrameRate.FULL);
 
-        // Emit AR scene view ready event
         eventEmitter.emit(GameEvents.AR_SCENE_VIEW_READY, arSceneView);
     }
 
     @Override
     protected void onDestroy() {
-        // Clean up listeners
         if (stateManager != null) {
             stateManager.removeStateChangeListener(stateChangeListener);
 
-            // Unregister all state handlers
             stateManager.unregisterStateHandler(AppStateManager.AppState.LOADING);
             stateManager.unregisterStateHandler(AppStateManager.AppState.INSTRUCTIONS);
             stateManager.unregisterStateHandler(AppStateManager.AppState.MAIN);
