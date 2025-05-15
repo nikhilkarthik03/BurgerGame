@@ -17,6 +17,7 @@ public class AppStateManager {
     public enum AppState {
         LOADING,
         INSTRUCTIONS,
+        DESCRIPTION,
         SELECTION,
         MAIN,
         END

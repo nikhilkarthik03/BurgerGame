@@ -6,6 +6,7 @@ import android.os.Looper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EventEmitter {
     private static volatile EventEmitter instance;
-    private final Map<String, List<EventListener>> listeners;
+    private final Map<String, List<WeakReference<EventListener>>> listeners;
     private final Handler mainHandler;
 
     public interface EventListener {
@@ -44,15 +45,15 @@ public class EventEmitter {
      */
     public boolean on(@NonNull String eventName, @NonNull EventListener listener) {
         synchronized (listeners) {
-            List<EventListener> eventListeners = listeners.computeIfAbsent(eventName, k -> new ArrayList<>());
+            List<WeakReference<EventListener>> eventListeners = listeners.computeIfAbsent(eventName, k -> new ArrayList<>());
 
-            // Check if this listener is already registered for this event
-            if (eventListeners.contains(listener)) {
-                return false; // Listener already exists, don't add it again
+            // Prevent duplicates
+            for (WeakReference<EventListener> ref : eventListeners) {
+                EventListener existing = ref.get();
+                if (existing != null && existing.equals(listener)) return false;
             }
 
-            // Add the new listener
-            eventListeners.add(listener);
+            eventListeners.add(new WeakReference<>(listener));
             return true;
         }
     }
@@ -65,7 +66,7 @@ public class EventEmitter {
      */
     public void off(@NonNull String eventName, @NonNull EventListener listener) {
         synchronized (listeners) {
-            List<EventListener> eventListeners = listeners.get(eventName);
+            List<WeakReference<EventListener>> eventListeners = listeners.get(eventName);
             if (eventListeners != null) {
                 eventListeners.remove(listener);
                 if (eventListeners.isEmpty()) {
@@ -81,18 +82,21 @@ public class EventEmitter {
      * @param data Data to pass to listeners
      */
     public void emit(@NonNull String eventName, @Nullable Object data) {
-        List<EventListener> eventListeners;
+        List<WeakReference<EventListener>> eventListeners;
         synchronized (listeners) {
             eventListeners = listeners.get(eventName);
             if (eventListeners == null) return;
             eventListeners = new ArrayList<>(eventListeners);
         }
 
-        for (EventListener listener : eventListeners) {
-            // Post to main thread to ensure UI safety
-            mainHandler.post(() -> listener.onEvent(eventName, data));
+        for (WeakReference<EventListener> ref : eventListeners) {
+            EventListener listener = ref.get();
+            if (listener != null) {
+                mainHandler.post(() -> listener.onEvent(eventName, data));
+            }
         }
     }
+
 
     /**
      * Remove all listeners for a specific event
@@ -113,17 +117,17 @@ public class EventEmitter {
         }
     }
 
-    /**
-     * Get the number of listeners for a specific event
-     * @param eventName Name of the event
-     * @return Number of listeners
-     */
-    public int listenerCount(@NonNull String eventName) {
-        synchronized (listeners) {
-            List<EventListener> eventListeners = listeners.get(eventName);
-            return eventListeners != null ? eventListeners.size() : 0;
-        }
-    }
+//    /**
+//     * Get the number of listeners for a specific event
+//     * @param eventName Name of the event
+//     * @return Number of listeners
+//     */
+//    public int listenerCount(@NonNull String eventName) {
+//        synchronized (listeners) {
+//            List<EventListener> eventListeners = listeners.get(eventName);
+//            return eventListeners != null ? eventListeners.size() : 0;
+//        }
+//    }
 
     /**
      * Subscribe to an event for one time only

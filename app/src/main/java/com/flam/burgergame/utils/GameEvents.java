@@ -22,6 +22,8 @@ public final class GameEvents {
     public static final String MODEL_LOAD_ERROR = "model_load_error";
     public static final String MODEL_ANIMATION_STARTED = "model_animation_started";
     public static final String MODEL_TAPPED = "model_tapped";
+    public static final String ALL_MODELS_LOADED = "all_models_loaded";
+
     public static final String CLEARING_SCENE_NODES = "clearing_scene_nodes";
     public static final String SCENE_NODES_CLEARED = "scene_nodes_cleared";
 

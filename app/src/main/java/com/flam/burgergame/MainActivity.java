@@ -1,8 +1,10 @@
 package com.flam.burgergame;
 
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
+import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -20,12 +22,14 @@ import com.flam.burgergame.state.AppStateManager;
 import com.flam.burgergame.state.StateHandler;
 import com.flam.burgergame.utils.EventEmitter;
 import com.flam.burgergame.utils.GameEvents;
+import com.flam.burgergame.utils.ModelLoaderManager;
 import com.google.ar.core.Config;
 import com.google.ar.core.Session;
 import com.google.ar.sceneform.ArSceneView;
 import com.google.ar.sceneform.Sceneform;
 import com.google.ar.sceneform.ux.ArFragment;
 import com.google.ar.sceneform.ux.BaseArFragment;
+import com.google.ar.sceneform.ux.InstructionsController;
 
 public class MainActivity extends AppCompatActivity implements
         FragmentOnAttachListener,
@@ -33,13 +37,19 @@ public class MainActivity extends AppCompatActivity implements
         ArFragment.OnViewCreatedListener {
 
     private ArFragment arFragment;
+    private MediaPlayer bgmPlayer;
+
     private AppStateManager stateManager;
     private EventEmitter eventEmitter;
     private EventEmitter.EventListener stateChangeListener;
+    private EventEmitter.EventListener modelLoadListener;
+    private ModelLoaderManager modelLoaderManager;
 
-    private FrameLayout loadingLayout, instructionsLayout, selectionLayout, gameScreen;
-    private ImageView nextButton, startButton, restartButton;
+    private FrameLayout loadingLayout, instructionsLayout, descriptionLayout,  selectionLayout, gameScreen;
+    private ImageView nextButton1, nextButton2, startButton, restartButton;
 
+    private ImageView instructionsVideoview;
+    private String InstructionsVideoPath;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,28 +62,82 @@ public class MainActivity extends AppCompatActivity implements
 
         setContentView(R.layout.activity_main);
 
+        bgmPlayer = MediaPlayer.create(this, R.raw.v1); // Use your filename
+        bgmPlayer.setLooping(true); // Optional: Loop BGM
+        bgmPlayer.setVolume(0.5f, 0.5f); // Optional: Set volume (left, right)
+        bgmPlayer.start();
+
         stateManager = AppStateManager.getInstance();
         eventEmitter = EventEmitter.getInstance();
+        modelLoaderManager = ModelLoaderManager.getInstance();
 
         loadingLayout = findViewById(R.id.loadingView);
         instructionsLayout = findViewById(R.id.instructionsView);
+        descriptionLayout = findViewById(R.id.descriptionView);
         selectionLayout = findViewById(R.id.selectionView);
         gameScreen = findViewById(R.id.gameScreen);
-        nextButton = findViewById(R.id.nextButton);
+        nextButton1 = findViewById(R.id.nextButton1);
+        nextButton2 = findViewById(R.id.nextButton2);
         startButton = findViewById(R.id.startButton);
         restartButton = findViewById(R.id.restartButton);
+        WebView gifView = findViewById(R.id.logo);
+        gifView.getSettings().setLoadWithOverviewMode(true);
+        gifView.getSettings().setUseWideViewPort(true);
+        gifView.getSettings().setJavaScriptEnabled(true);
+        gifView.setBackgroundColor(0x00000000); // Transparent background
+
+        String gifPath = "file:///android_res/raw/logo.gif"; // if stored in res/raw
+        String htmlData = "<html><body style='margin:0;padding:0;'><img style='width:100%;height:auto;' src=\"" + gifPath + "\"></body></html>";
+        gifView.loadDataWithBaseURL("file:///android_res/raw/", htmlData, "text/html", "UTF-8", null);
+
 
         getSupportFragmentManager().addFragmentOnAttachListener(this);
         launchArFragment();
 
         registerStateHandlers();
-
+        setupModelLoadListener();
         setupStateChangeListener();
 
         stateManager.setAppState(AppStateManager.AppState.LOADING);
+    }
 
-        new Handler().postDelayed(() ->
-                stateManager.setAppState(AppStateManager.AppState.INSTRUCTIONS), 3000);
+    private void setupModelLoadListener() {
+        final long MIN_LOADING_TIME_MS = 5000; // 5 seconds minimum loading time
+        final long[] loadStartTime = {System.currentTimeMillis()}; // Track when loading started
+
+        modelLoadListener = (eventName, data) -> {
+            if (eventName.equals(GameEvents.ALL_MODELS_LOADED)) {
+                // Models loaded, but ensure we show loading screen for at least 5 seconds
+                long elapsedTime = System.currentTimeMillis() - loadStartTime[0];
+                long remainingTime = Math.max(0, MIN_LOADING_TIME_MS - elapsedTime);
+
+//                // Delay transition to instructions by remaining time if needed
+                new Handler().postDelayed(() ->
+                                stateManager.setAppState(AppStateManager.AppState.INSTRUCTIONS),
+                        3000);
+            }
+        };
+
+        // Register listener for model loading events
+        eventEmitter.on(GameEvents.ALL_MODELS_LOADED, modelLoadListener);
+    }
+
+    public void stopBackgroundMusic() {
+        if (bgmPlayer != null && bgmPlayer.isPlaying()) {
+            bgmPlayer.stop();
+        }
+    }
+
+    public void restartBackgroundMusic() {
+        if (bgmPlayer != null) {
+            bgmPlayer.release();  // Release the old player
+            bgmPlayer = null;
+        }
+
+        bgmPlayer = MediaPlayer.create(this, R.raw.v1);  // Recreate
+        bgmPlayer.setLooping(true);
+        bgmPlayer.setVolume(0.3f, 0.3f);
+        bgmPlayer.start();
     }
 
     private void registerStateHandlers() {
@@ -82,6 +146,11 @@ public class MainActivity extends AppCompatActivity implements
             public void activate() {
                 loadingLayout.setVisibility(View.VISIBLE);
                 eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "loading_activated");
+
+                // Start loading models when in loading state
+                if (modelLoaderManager != null) {
+                    modelLoaderManager.loadAllModels(MainActivity.this);
+                }
             }
 
             @Override
@@ -106,13 +175,13 @@ public class MainActivity extends AppCompatActivity implements
 
                 if (arFragment != null && arFragment.getArSceneView() != null) {
                     instructionsScreen = new Instructions(MainActivity.this, arFragment);
-                    instructionsScreen.loadModels();
+                    instructionsScreen.setupPreloadedModels();
                 }
 
                 // Set up start button action
-                nextButton.setOnClickListener(v -> {
-                    eventEmitter.emit(GameEvents.BUTTON_CLICKED, "nextButton");
-                    stateManager.setAppState(AppStateManager.AppState.SELECTION);
+                nextButton1.setOnClickListener(v -> {
+                    eventEmitter.emit(GameEvents.BUTTON_CLICKED, "nextButton1");
+                    stateManager.setAppState(AppStateManager.AppState.DESCRIPTION);
                 });
 
                 eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "instructions_activated");
@@ -137,6 +206,34 @@ public class MainActivity extends AppCompatActivity implements
             }
         });
 
+        // Description state handler
+        stateManager.registerStateHandler(AppStateManager.AppState.DESCRIPTION, new StateHandler() {
+            @Override
+            public void activate() {
+                descriptionLayout.setVisibility(View.VISIBLE);
+
+                // Set up start button action
+                nextButton2.setOnClickListener(v -> {
+                    eventEmitter.emit(GameEvents.BUTTON_CLICKED, "nextButton2");
+                    stateManager.setAppState(AppStateManager.AppState.SELECTION);
+                });
+
+                eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "instructions_activated");
+            }
+
+            @Override
+            public void deactivate() {
+                descriptionLayout.setVisibility(View.GONE);
+
+                eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "instructions_deactivated");
+            }
+
+            @Override
+            public View getRootView() {
+                return instructionsLayout;
+            }
+        });
+
         stateManager.registerStateHandler(AppStateManager.AppState.SELECTION, new StateHandler() {
             private Selection selectionScreen;
 
@@ -144,32 +241,34 @@ public class MainActivity extends AppCompatActivity implements
             public void activate() {
                 selectionLayout.setVisibility(View.VISIBLE);
 
-                if (arFragment != null && arFragment.getArSceneView() != null) {
-                    selectionScreen = new Selection(MainActivity.this, arFragment);
-                    selectionScreen.loadModels();
-                }
+                // Play instruction video
+                WebView instruction = findViewById(R.id.instruction);
+                instruction.getSettings().setLoadWithOverviewMode(true);
+                instruction.getSettings().setUseWideViewPort(true);
+                instruction.getSettings().setJavaScriptEnabled(true);
+                instruction.setBackgroundColor(0x00000000); // Transparent background
 
-                // Set up start button action
+                String gifPath = "file:///android_res/raw/tray1.gif"; // if stored in res/raw
+                String htmlData = "<html><body style='margin:0;padding:0;'><img style='width:100%;height:auto;' src=\"" + gifPath + "\"></body></html>";
+                instruction.loadDataWithBaseURL("file:///android_res/raw/", htmlData, "text/html", "UTF-8", null);
+
+
                 startButton.setOnClickListener(v -> {
                     eventEmitter.emit(GameEvents.BUTTON_CLICKED, "startButton");
                     stateManager.setAppState(AppStateManager.AppState.MAIN);
                 });
 
                 eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "selections_activated");
+
             }
+
 
             @Override
             public void deactivate() {
                 selectionLayout.setVisibility(View.GONE);
 
-                // Clean up
-                if (selectionScreen != null) {
-                    selectionScreen.clearAllNodes();
-                    selectionScreen = null;
-                }
-
-                eventEmitter.emit(GameEvents.UI_STATE_CHANGED, "selections_deactivated");
             }
+
 
             @Override
             public View getRootView() {
@@ -180,6 +279,8 @@ public class MainActivity extends AppCompatActivity implements
 
         // Main game state handler
         stateManager.registerStateHandler(AppStateManager.AppState.MAIN, new StateHandler() {
+
+            private final int gameTime = 30;
             private GameScreen gameScreenManager;
 
             @Override
@@ -188,9 +289,8 @@ public class MainActivity extends AppCompatActivity implements
 
                 if (arFragment != null && arFragment.getArSceneView() != null) {
                     gameScreenManager = new GameScreen(MainActivity.this, arFragment);
-                    gameScreenManager.startGameTimer(10);
+                    gameScreenManager.startGameTimer(gameTime);
                     gameScreenManager.loadModels();
-
                 }
 
                 // Set up restart button action
@@ -199,7 +299,7 @@ public class MainActivity extends AppCompatActivity implements
 
                     if (gameScreenManager != null) {
                         gameScreenManager.restart();
-                        gameScreenManager.startGameTimer(10);
+                        gameScreenManager.startGameTimer(gameTime);
                         gameScreenManager.placeModel();
                     }
                 });
@@ -268,9 +368,7 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     public void onSessionConfiguration(Session session, Config config) {
-        if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-            config.setDepthMode(Config.DepthMode.AUTOMATIC);
-        }
+        config.setDepthMode(Config.DepthMode.DISABLED);
         config.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
     }
 
@@ -279,7 +377,15 @@ public class MainActivity extends AppCompatActivity implements
         arFragment.setOnViewCreatedListener(null);
         arSceneView.setFrameRateFactor(ArSceneView.FrameRate.FULL);
 
-        eventEmitter.emit(GameEvents.AR_SCENE_VIEW_READY, arSceneView);
+        arSceneView.getPlaneRenderer().setEnabled(false);
+        arFragment.setOnTapArPlaneListener(null);
+        arFragment.getInstructionsController().setEnabled(InstructionsController.TYPE_PLANE_DISCOVERY,false);
+
+        arSceneView.getPlaneRenderer().getMaterial().thenAccept(material -> {
+            material.setFloat3("color", 0.0f, 0.0f, 0.0f);
+            arSceneView.getPlaneRenderer().setVisible(false);
+        });
+
     }
 
     @Override

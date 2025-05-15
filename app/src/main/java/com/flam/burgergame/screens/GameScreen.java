@@ -4,8 +4,10 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.CountDownTimer;
+import android.os.Handler;
 import android.transition.TransitionManager;
 import android.util.Log;
 import android.util.TypedValue;
@@ -16,9 +18,16 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.flam.burgergame.MainActivity;
 import com.flam.burgergame.R;
 import com.flam.burgergame.utils.EventEmitter;
 import com.flam.burgergame.utils.GameEvents;
+import android.graphics.Color;
+import com.google.ar.core.Anchor;
+import com.google.ar.core.Frame;
+import com.google.ar.core.Pose;
+import com.google.ar.core.Session;
+import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.animation.ModelAnimator;
 import com.google.ar.sceneform.math.Quaternion;
@@ -41,12 +50,19 @@ public class GameScreen {
     private final Context context;
     private final ArFragment arFragment;
     private final EventEmitter eventEmitter;
+    private MediaPlayer tapSound, coinSound;
+
     private CountDownTimer gameTimer;
     private int currentScore = 0;
     private final List<Node> sceneNodes = new ArrayList<>();
+    private final List<AnchorNode> anchorNodes = new ArrayList<>(); // Track anchor nodes
     private final List<Renderable> loadedModels = new ArrayList<>();
     private final Map<Renderable, String> modelTypeMap = new HashMap<>();
     private final Set<Node> tappedNodes = new HashSet<>();
+    private final Handler respawnHandler = new Handler();
+    private boolean isGameActive = false;
+    private Anchor centerAnchor; // Main game anchor
+    private MediaPlayer countdownSound;
 
     // Add a map to store node to model type associations
     private final Map<Node, String> nodeModelTypeMap = new HashMap<>();
@@ -56,9 +72,22 @@ public class GameScreen {
     private final TextView scoreText;
 
     // Model URIs
-    private static final String BURGER_MODEL = "models/prop_burger.glb";
+    private static final String BURGER_MODEL = "models/Burger_Blast.glb";
     private static final String COKE_MODEL = "models/prop_coke.glb";
     private static final String WINGS_MODEL = "models/prop_chickenWings.glb";
+
+    private final Handler imageChangeHandler = new Handler();
+
+    // Respawn delay in milliseconds
+    private static final int RESPAWN_DELAY = 1500; // 1.5 seconds
+
+    // Remaining game time in seconds
+    private int remainingGameTime = 0;
+
+    private final Map<Integer, String> imageToModelMap = new HashMap<>();
+    private int currentTargetImageId = -1; // holds the currently displayed image drawable id
+
+
 
     public GameScreen(Context context, ArFragment arFragment) {
         this.context = context;
@@ -68,12 +97,14 @@ public class GameScreen {
         // Set up UI references
         timerText = ((Activity) context).findViewById(R.id.timerText);
         scoreText = ((Activity) context).findViewById(R.id.scoreText);
+
+        imageToModelMap.put(R.drawable.homebutton, BURGER_MODEL);
+        imageToModelMap.put(R.drawable.coke, COKE_MODEL);
+        imageToModelMap.put(R.drawable.wings, WINGS_MODEL);
     }
 
     public void loadModels() {
         // Emit event that model loading started
-        eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "game_models");
-
         String[] modelUris = {
                 BURGER_MODEL,
                 COKE_MODEL,
@@ -99,7 +130,7 @@ public class GameScreen {
                             // If all models are loaded, emit model loaded event
                             if (loadedModels.size() == modelUris.length) {
                                 eventEmitter.emit(GameEvents.MODEL_LOADED, "game_models");
-                                placeModel();
+                                createCenterAnchor();
                             }
                         }
                     })
@@ -110,8 +141,55 @@ public class GameScreen {
         }
     }
 
+    private void createCenterAnchor() {
+        if (arFragment == null || arFragment.getArSceneView() == null ||
+                arFragment.getArSceneView().getArFrame() == null) {
+            new Handler().postDelayed(this::createCenterAnchor, 500);
+            return;
+        }
+
+        try {
+            Session session = arFragment.getArSceneView().getSession();
+            Frame frame = arFragment.getArSceneView().getArFrame();
+
+            if (session == null || frame == null) {
+                new Handler().postDelayed(this::createCenterAnchor, 500);
+                return;
+            }
+
+            Pose cameraPose = frame.getCamera().getPose();
+            float[] cameraPosition = cameraPose.getTranslation();
+            float[] forward = cameraPose.getZAxis(); // points backward, so negate it
+
+            float x = cameraPosition[0]; // move 2m forward
+            float y = cameraPosition[1] - 0.5f; // slightly below eye level
+            float z = cameraPosition[2];
+
+            Pose anchorPose = Pose.makeTranslation(x, y, z);
+            centerAnchor = session.createAnchor(anchorPose);
+
+            placeModel();
+        } catch (Exception e) {
+            Log.e("GameScreen", "Error creating anchor: " + e.getMessage());
+            new Handler().postDelayed(this::createCenterAnchor, 1000);
+        }
+    }
+
     public void placeModel() {
-        List<Vector3> spherePoints = generateSpherePoints(20, 1.0f);
+        if (centerAnchor == null) {
+            createCenterAnchor();
+            return;
+        }
+
+        // Clear existing nodes first
+        clearAllNodes();
+
+        // Create an anchor node for our main anchor
+        AnchorNode anchorNode = new AnchorNode(centerAnchor);
+        anchorNode.setParent(arFragment.getArSceneView().getScene());
+        anchorNodes.add(anchorNode);
+
+        List<Vector3> spherePoints = generateSpherePoints(20, 1.5f);
 
         for (Vector3 pos : spherePoints) {
             if (loadedModels.isEmpty()) {
@@ -121,13 +199,11 @@ public class GameScreen {
             int randomModelIndex = (int) (Math.random() * loadedModels.size());
             Renderable model = loadedModels.get(randomModelIndex);
 
-            placeModelAtPosition(model, pos);
+            placeModelAtPosition(model, pos, anchorNode);
         }
-
-        eventEmitter.emit(GameEvents.MODEL_LOADED, "model_placed");
     }
 
-    private void placeModelAtPosition(Renderable model, Vector3 position) {
+    private void placeModelAtPosition(Renderable model, Vector3 position, AnchorNode parentAnchor) {
         Node node = new Node();
         node.setRenderable(model);
 
@@ -136,28 +212,25 @@ public class GameScreen {
 
         sceneNodes.add(node);
 
-        node.setParent(arFragment.getArSceneView().getScene());
-        node.setWorldPosition(position);
-        node.setLocalScale(new Vector3(1f, 1f, 1f));
+        // Attach to the anchor node instead of directly to the scene
+        node.setParent(parentAnchor);
+        node.setLocalPosition(position);
+        node.setLocalScale(new Vector3(2f, 2f, 2f)); // Make models a bit smaller
 
         node.setOnTapListener((hitTestResult, motionEvent) -> {
             animateNodeScaleAndRemove(node);
         });
-
-        RenderableInstance renderableInstance = node.getRenderableInstance();
-        if (renderableInstance != null) {
-            renderableInstance.setCulling(false);
-
-            if (renderableInstance.hasAnimations()) {
-                List<String> anims = renderableInstance.getAnimationNames();
-                if (!anims.isEmpty()) {
-                    ObjectAnimator animator = ModelAnimator.ofAnimation(renderableInstance, anims.get(0));
-                    animator.setRepeatCount(ObjectAnimator.INFINITE);
-                    animator.start();
-                }
-            }
-        }
     }
+
+    private void randomizeTargetImage() {
+        List<Integer> drawableIds = new ArrayList<>(imageToModelMap.keySet());
+        int randomIndex = (int) (Math.random() * drawableIds.size());
+        currentTargetImageId = drawableIds.get(randomIndex);
+
+        ImageView homeIcon = ((Activity) context).findViewById(R.id.home);
+        homeIcon.setImageResource(currentTargetImageId);
+    }
+
 
     private List<Vector3> generateSpherePoints(int count, float radius) {
         List<Vector3> points = new ArrayList<>();
@@ -179,11 +252,35 @@ public class GameScreen {
     }
 
     public void updateScore(int points) {
+        int previousScore = currentScore;
         currentScore += points;
         updateScoreText();
 
+        // Check if player crossed the 1000 points milestone
+        if (previousScore < 1000 && currentScore >= 1000) {
+            addBonusTime(10);
+            showBonusTimeToast(10);
+        }
+
+        // Check for additional milestones (optional)
+        // For example, add 10 more seconds at 2000 points
+        if (previousScore < 2000 && currentScore >= 2000) {
+            addBonusTime(10);
+            showBonusTimeToast(10);
+        }
+
+        // Additional milestones can be added here
+        if (previousScore < 3000 && currentScore >= 3000) {
+            addBonusTime(15);
+            showBonusTimeToast(15);
+        }
+
+//        coinSound = MediaPlayer.create(this.context, R.raw.coins); // Use your filename
+//        coinSound.setLooping(false); // Optional: Loop BGM
+//        coinSound.setVolume(0.7f, 0.7f); // Optional: Set volume (left, right)
+//        coinSound.start();
+
         // Emit score updated event
-//        eventEmitter.emit(GameEvents.SCORE_UPDATED, currentScore);
     }
 
     private void updateScoreText() {
@@ -192,45 +289,134 @@ public class GameScreen {
         }
     }
 
+    /**
+     * Adds bonus time to the current game timer
+     * @param secondsToAdd Number of seconds to add to the timer
+     */
+    public void addBonusTime(int secondsToAdd) {
+        // Cancel existing timer
+        if (gameTimer != null) {
+            gameTimer.cancel();
+        }
+
+        // Add time to the remaining time
+        remainingGameTime += secondsToAdd;
+
+        // Create and start a new timer with updated time
+        startGameTimerWithRemaining(remainingGameTime);
+
+        // Emit event for bonus time added
+//        eventEmitter.emit(GameEvents.BONUS_TIME_ADDED, secondsToAdd);
+    }
+
+    private void scheduleTargetImageRotation() {
+        imageChangeHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isGameActive) return;
+
+                randomizeTargetImage(); // change the image
+
+                // Schedule next run randomly between 5–8 seconds
+                int delay = 3000 + (int)(Math.random() * 1000); // 5000–8000ms
+                imageChangeHandler.postDelayed(this, delay);
+            }
+        }, 1000); // initial delay before first change (optional)
+    }
+
+
     public void startGameTimer(int seconds) {
+        // Store initial game time
+        remainingGameTime = seconds;
+
+        // Start timer with initial seconds
+        startGameTimerWithRemaining(seconds);
+    }
+
+    private void startGameTimerWithRemaining(int seconds) {
         // Cancel any existing timer
         if (gameTimer != null) {
             gameTimer.cancel();
         }
 
+        // Set game as active
+        isGameActive = true;
+
+        randomizeTargetImage(); // set one immediately
+        scheduleTargetImageRotation(); // start rotation
+
+
         // Emit timer started event
-        eventEmitter.emit(GameEvents.GAME_TIMER_STARTED, seconds);
 
         // Create and start new timer
         gameTimer = new CountDownTimer(seconds * 1000L, 1000L) {
             @Override
             public void onTick(long millisUntilFinished) {
-                int secondsRemaining = (int) (millisUntilFinished / 1000);
+                remainingGameTime = (int) (millisUntilFinished / 1000);
 
-                // If you have a timer text view, update it
                 if (timerText != null) {
-                    timerText.setText(String.valueOf(secondsRemaining));
+                    timerText.setText(String.valueOf(remainingGameTime));
                 }
 
-                // Emit tick event
-//                eventEmitter.emit(GameEvents.GAME_TIMER_TICK, secondsRemaining);
+                // Play countdown sound when 3 seconds remain
+                if (remainingGameTime == 3) {
+                    countdownSound = MediaPlayer.create(context, R.raw.countdown); // Place countdown.mp3 as res/raw/countdown.mp3
+                    countdownSound.setLooping(false);
+                    countdownSound.setVolume(0.75f, 0.75f);
+                    countdownSound.start();
+                }
             }
+
 
             @Override
             public void onFinish() {
+                isGameActive = false;
                 clearAllNodes();
+
+                // Stop the background music
+                if (context instanceof MainActivity) {
+                    ((MainActivity) context).stopBackgroundMusic();
+                }
+
+                MediaPlayer endSound;
+                endSound = MediaPlayer.create(context, R.raw.win); // Use your filename
+                endSound.setLooping(false); // Optional: Loop BGM
+                endSound.setVolume(0.5f, 0.5f); // Optional: Set volume (left, right)
+                endSound.start();
+
 
                 // Show final score UI
                 showFinalScoreUI();
-
-                // Emit timer finished event
-                eventEmitter.emit(GameEvents.GAME_TIMER_FINISHED, currentScore);
             }
+
         }.start();
     }
 
+    private void animateStars() {
+        ImageView star1 = ((Activity) context).findViewById(R.id.star1);
+        ImageView star2 = ((Activity) context).findViewById(R.id.star2);
+        ImageView star3 = ((Activity) context).findViewById(R.id.star3);
+
+        animateStar(star1, 0);
+        animateStar(star2, 300);
+        animateStar(star3, 600);
+    }
+
+    private void animateStar(ImageView star, long delay) {
+        star.setVisibility(View.VISIBLE);
+        star.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(400)
+                .setStartDelay(delay)
+                .start();
+    }
+
+
     private void showFinalScoreUI() {
         Activity activity = (Activity) context;
+
+        animateStars();
 
         // Hide other UI elements
         activity.findViewById(R.id.gameHelper).setVisibility(View.GONE);
@@ -265,8 +451,42 @@ public class GameScreen {
         // Update scoreText layout
         paramsScoreText.removeRule(RelativeLayout.ALIGN_BOTTOM);
         paramsScoreText.addRule(RelativeLayout.CENTER_VERTICAL);
-        scoreText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        scoreText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         scoreText.setLayoutParams(paramsScoreText);
+    }
+
+    /**
+     * Shows a special toast for bonus time
+     * @param seconds Number of seconds added
+     */
+    private void showBonusTimeToast(int seconds) {
+        Toast toast = Toast.makeText(context, "BONUS: +" + seconds + " seconds!", Toast.LENGTH_LONG);
+        View view = toast.getView();
+
+        // Customize toast appearance if available on this Android version
+        if (view != null) {
+            // Set a background color
+            view.setBackgroundColor(Color.rgb(0, 200, 0));
+
+            // Find the TextView within the Toast
+            TextView text = view.findViewById(android.R.id.message);
+            if (text != null) {
+                text.setTextColor(Color.RED);
+                text.setTextSize(18);
+            }
+        }
+
+        toast.show();
+
+        // Flash the timer text to indicate bonus
+        if (timerText != null) {
+            // Flash timer text by changing colors
+            ObjectAnimator colorAnim = ObjectAnimator.ofArgb(timerText, "textColor",
+                    Color.RED, Color.GREEN, Color.RED);
+            colorAnim.setDuration(1000);
+            colorAnim.setRepeatCount(1);
+            colorAnim.start();
+        }
     }
 
     public void restart() {
@@ -281,6 +501,17 @@ public class GameScreen {
 
         // Reset tapped nodes tracking
         tappedNodes.clear();
+
+        // Reset remaining time
+        remainingGameTime = 0;
+
+        // Set game as active
+        isGameActive = true;
+
+
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).restartBackgroundMusic();
+        }
 
         // Reset UI elements
         activity.findViewById(R.id.gameHelper).setVisibility(View.VISIBLE);
@@ -314,17 +545,18 @@ public class GameScreen {
         paramsScoreText.removeRule(RelativeLayout.CENTER_VERTICAL);
         scoreText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
         paramsScoreText.bottomMargin = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP, 14, scorecard.getResources().getDisplayMetrics());
+                TypedValue.COMPLEX_UNIT_SP, 6, scorecard.getResources().getDisplayMetrics());
 
         scoreText.setLayoutParams(paramsScoreText);
 
+        // Create a new center anchor and place models
+        createCenterAnchor();
+
         // Emit restart event
-        eventEmitter.emit(GameEvents.GAME_STARTED, null);
     }
 
     public void clearAllNodes() {
         // First, emit event that we're clearing nodes
-        eventEmitter.emit(GameEvents.CLEARING_SCENE_NODES, sceneNodes.size());
 
         // Clear our tracked nodes
         for (Node node : sceneNodes) {
@@ -335,6 +567,17 @@ public class GameScreen {
             }
         }
         sceneNodes.clear();
+
+        // Clear anchor nodes
+        for (AnchorNode anchorNode : anchorNodes) {
+            if (anchorNode != null) {
+                if (anchorNode.getAnchor() != null) {
+                    anchorNode.getAnchor().detach();
+                }
+                anchorNode.setParent(null);
+            }
+        }
+        anchorNodes.clear();
 
         // For any other nodes, remove them too (safety)
         if (arFragment != null && arFragment.getArSceneView() != null) {
@@ -350,68 +593,105 @@ public class GameScreen {
         }
 
         // Emit event that nodes are cleared
-        eventEmitter.emit(GameEvents.SCENE_NODES_CLEARED, null);
     }
 
+    private void removeNodeAndRespawn(Node node, Vector3 position, AnchorNode parentAnchor) {
+        node.setParent(null);
+        sceneNodes.remove(node);
+        nodeModelTypeMap.remove(node);
+
+        // Respawn a new model after 500ms
+        respawnHandler.postDelayed(() -> {
+            if (!isGameActive || loadedModels.isEmpty() || parentAnchor == null) return;
+
+            int randomModelIndex = (int) (Math.random() * loadedModels.size());
+            Renderable model = loadedModels.get(randomModelIndex);
+            placeModelAtPosition(model, position, parentAnchor);
+        }, 500);
+    }
+
+
     private void animateNodeScaleAndRemove(Node node) {
-        // Prevent re-tapping already processed nodes
         if (tappedNodes.contains(node)) return;
+        tappedNodes.add(node);
 
-        tappedNodes.add(node); // Mark this node as handled
+        // Find the parent anchor node
+        Node parent = (Node) node.getParent();
+        while (parent != null && !(parent instanceof AnchorNode)) {
+            parent = (Node) parent.getParent();
+        }
+        AnchorNode parentAnchor = (parent instanceof AnchorNode) ? (AnchorNode) parent : null;
 
-        final float initialScale = 1f;
-        ValueAnimator scaleAnimator = ValueAnimator.ofFloat(initialScale, 1.1f, 0f);
-        scaleAnimator.setDuration(500); // milliseconds
-
-        scaleAnimator.addUpdateListener(animation -> {
-            float scale = (float) animation.getAnimatedValue();
-            node.setLocalScale(new Vector3(scale, scale, scale));
-        });
-
-        scaleAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(android.animation.Animator animation) {
-                node.setParent(null);
-                sceneNodes.remove(node);
-
-                nodeModelTypeMap.remove(node);
-            }
-        });
-
-        scaleAnimator.start();
-
-        // Check what type of model was tapped and update score accordingly
         String modelType = nodeModelTypeMap.get(node);
         int points;
 
-        if (BURGER_MODEL.equals(modelType)) {
-            // Burger - add 100 points
+        String correctModel = imageToModelMap.get(currentTargetImageId);
+        if (correctModel != null && correctModel.equals(modelType)) {
             points = 100;
+            tapSound = MediaPlayer.create(this.context, R.raw.pos); // Use your filename
+            tapSound.setLooping(false); // Optional: Loop BGM
+            tapSound.setVolume(0.7f, 0.7f); // Optional: Set volume (left, right)
+            tapSound.start();
             Toast.makeText(context, "+100 Points!", Toast.LENGTH_SHORT).show();
         } else {
-            // Any other food item - subtract 50 points
             points = -50;
+            tapSound = MediaPlayer.create(this.context, R.raw.neg); // Use your filename
+            tapSound.setLooping(false); // Optional: Loop BGM
+            tapSound.setVolume(0.7f, 0.7f); // Optional: Set volume (left, right)
+            tapSound.start();
             Toast.makeText(context, "-50 Points!", Toast.LENGTH_SHORT).show();
         }
+
+
 
         updateScore(points);
         updateScoreText();
 
 
-        eventEmitter.emit(GameEvents.SCORE_UPDATED, currentScore);
+        Vector3 oldPosition = node.getLocalPosition();
+
+        RenderableInstance renderableInstance = node.getRenderableInstance();
+        if (renderableInstance != null && renderableInstance.hasAnimations()) {
+            List<String> animations = renderableInstance.getAnimationNames();
+            if (!animations.isEmpty()) {
+                ObjectAnimator animator = ModelAnimator.ofAnimation(renderableInstance, animations.get(0));
+                animator.setRepeatCount(0);
+                animator.addListener(new android.animation.AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                        removeNodeAndRespawn(node, oldPosition, parentAnchor);
+                    }
+                });
+                animator.start();
+                return;
+            }
+        }
+
+        removeNodeAndRespawn(node, oldPosition, parentAnchor);
     }
 
     public void cleanup() {
+        isGameActive = false;
+
+        imageChangeHandler.removeCallbacksAndMessages(null);
+
         if (gameTimer != null) {
             gameTimer.cancel();
             gameTimer = null;
         }
 
+        // Remove any pending respawn callbacks
+        respawnHandler.removeCallbacksAndMessages(null);
+
         clearAllNodes();
+
+        // Clean up center anchor if it exists
+        if (centerAnchor != null) {
+            centerAnchor.detach();
+            centerAnchor = null;
+        }
 
         tappedNodes.clear();
         nodeModelTypeMap.clear();
-
-        eventEmitter.emit(GameEvents.GAME_ENDED, currentScore);
     }
 }

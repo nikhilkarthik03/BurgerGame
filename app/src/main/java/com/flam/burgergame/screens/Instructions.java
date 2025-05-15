@@ -2,13 +2,14 @@ package com.flam.burgergame.screens;
 
 import android.animation.ObjectAnimator;
 import android.content.Context;
-import android.net.Uri;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.flam.burgergame.utils.EventEmitter;
 import com.flam.burgergame.utils.GameEvents;
+import com.flam.burgergame.utils.ModelLoaderManager;
 import com.google.ar.sceneform.math.Vector3;
-import com.google.ar.sceneform.rendering.ModelRenderable;
+import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.rendering.RenderableInstance;
 import com.google.ar.sceneform.ux.ArFragment;
 import com.google.ar.sceneform.Node;
@@ -19,80 +20,79 @@ import java.util.List;
 
 public class Instructions {
 
+    private static final String TAG = "Instructions";
+
     private final ArFragment arFragment;
     private final Context context;
     private final EventEmitter eventEmitter;
+    private final ModelLoaderManager modelLoaderManager;
     private final List<Node> sceneNodes = new ArrayList<>();
-
-    private final float scale = 2.5f;
 
     public Instructions(Context context, ArFragment arFragment) {
         this.context = context;
         this.arFragment = arFragment;
         this.eventEmitter = EventEmitter.getInstance();
+        this.modelLoaderManager = ModelLoaderManager.getInstance();
     }
 
-    public void loadModels() {
-        // Emit event that model loading started
+    public void setupPreloadedModels() {
+        Log.d(TAG, "Setting up preloaded models for instructions");
         eventEmitter.emit(GameEvents.MODEL_LOADING_STARTED, "instructions_fries");
 
-        ModelRenderable.builder()
-                .setSource(context, Uri.parse("models/Fries_Popin_Animation_V2.glb"))
-                .setIsFilamentGltf(true)
-                .setAsyncLoadEnabled(false)
-                .build()
-                .thenAccept(renderable -> {
-                    Node node = new Node();
-                    node.setRenderable(renderable);
-                    node.setParent(arFragment.getArSceneView().getScene());
-                    node.setLocalScale(new Vector3(scale, scale, scale));
+        // Get the preloaded fries model
+        Renderable friesModel = modelLoaderManager.getModel(ModelLoaderManager.FRIES_MODEL);
 
-                    // Add node to our tracking list
-                    sceneNodes.add(node);
+        if (friesModel == null) {
+            String errorMsg = "Preloaded fries model not found!";
+            Log.e(TAG, errorMsg);
+            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show();
+            eventEmitter.emit(GameEvents.MODEL_LOAD_ERROR, errorMsg);
+            return;
+        }
 
-                    arFragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
-                        // Get camera position and forward vector
-                        Vector3 cameraPos = arFragment.getArSceneView().getScene().getCamera().getWorldPosition();
-                        Vector3 cameraForward = arFragment.getArSceneView().getScene().getCamera().getForward();
+        Node node = new Node();
+        node.setRenderable(friesModel);
+        node.setParent(arFragment.getArSceneView().getScene());
+        float scale = 2.5f;
+        node.setLocalScale(new Vector3(scale, scale, scale));
 
-                        // Position the node 1 meter in front of the camera
-                        Vector3 targetPos = Vector3.add(cameraPos, cameraForward.scaled(1.0f));
-                        node.setWorldPosition(targetPos);
+        // Add node to our tracking list
+        sceneNodes.add(node);
 
-                        // Make node face the camera
-                        node.setLookDirection(Vector3.subtract(targetPos, cameraPos));
-                    });
+        arFragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
+            // Get camera position and forward vector
+            Vector3 cameraPos = arFragment.getArSceneView().getScene().getCamera().getWorldPosition();
+            Vector3 cameraForward = arFragment.getArSceneView().getScene().getCamera().getForward();
 
-                    // Optional animation logic
-                    RenderableInstance renderableInstance = node.getRenderableInstance();
-                    if (renderableInstance != null) {
-                        renderableInstance.setCulling(false);
-                        if (renderableInstance.hasAnimations()) {
-                            List<String> anims = renderableInstance.getAnimationNames();
-                            if (!anims.isEmpty()) {
-                                ObjectAnimator animator = ModelAnimator.ofAnimation(renderableInstance, anims.get(0));
-                                animator.setRepeatCount(ObjectAnimator.INFINITE);
-                                animator.start();
+            // Position the node 1 meter in front of the camera
+            Vector3 targetPos = Vector3.add(cameraPos, cameraForward.scaled(1.0f));
+            node.setWorldPosition(targetPos);
 
-                                // Emit event that model is animated
-                                eventEmitter.emit(GameEvents.MODEL_ANIMATION_STARTED, anims.get(0));
-                            }
-                        }
-                    }
+            // Make node face the camera
+            node.setLookDirection(Vector3.subtract(targetPos, cameraPos));
+        });
 
-                    // Emit event that model is loaded and placed in scene
-                    eventEmitter.emit(GameEvents.MODEL_LOADED, "instructions_fries");
-                })
-                .exceptionally(throwable -> {
-                    String errorMsg = "Failed to load models/Fries_Popin_Animation.glb";
-                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show();
+        // Optional animation logic
+        RenderableInstance renderableInstance = node.getRenderableInstance();
+        if (renderableInstance != null) {
+            renderableInstance.setCulling(false);
+            if (renderableInstance.hasAnimations()) {
+                List<String> anims = renderableInstance.getAnimationNames();
+                if (!anims.isEmpty()) {
+                    ObjectAnimator animator = ModelAnimator.ofAnimation(renderableInstance, anims.get(0));
+                    animator.setRepeatCount(0);
+                    animator.setAutoCancel(false); // prevent auto-removal
+                    animator.start();
 
-                    // Emit error event
-                    eventEmitter.emit(GameEvents.MODEL_LOAD_ERROR, errorMsg);
-                    return null;
-                });
+                    // Emit event that model is animated
+                    eventEmitter.emit(GameEvents.MODEL_ANIMATION_STARTED, anims.get(0));
+                }
+            }
+        }
+
+        // Emit event that model is loaded and placed in scene
+//        eventEmitter.emit(GameEvents.MODEL_LOADED, "instructions_fries");
     }
-
     public void clearAllNodes() {
         // First, emit event that we're clearing nodes
         eventEmitter.emit(GameEvents.CLEARING_SCENE_NODES, sceneNodes.size());
@@ -120,6 +120,5 @@ public class Instructions {
 
     public void cleanup() {
         clearAllNodes();
-        // Additional cleanup if needed
     }
 }

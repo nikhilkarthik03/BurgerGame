@@ -16,11 +16,16 @@
         android:layout_height="match_parent"
         android:padding="20dp">
 
-        <ImageView
-            android:layout_width="match_parent"
+        <WebView
+            android:id="@+id/logo"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/logo"
-            android:layout_gravity="center" />
+            android:layout_centerInParent="true"
+            android:layout_gravity="center"
+            android:background="@android:color/transparent"
+            android:layerType="hardware"
+            />
+
     </FrameLayout>
 
 
@@ -32,11 +37,39 @@
         android:visibility="gone">
 
         <ImageView
-            android:id="@+id/nextButton"
+            android:id="@+id/nextButton1"
             android:layout_width="wrap_content"
             android:layout_height="60dp"
             android:contentDescription="Next Button"
-            android:src="@drawable/next_button"
+            android:src="@drawable/next"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="60dp" />
+
+    </FrameLayout>
+
+    <!-- DESCRIPTION View -->
+    <FrameLayout
+        android:id="@+id/descriptionView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/description"
+            android:layout_width="300dp"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:layout_gravity="center"
+            android:src="@drawable/description"
+            android:layerType="hardware"
+            />
+
+        <ImageView
+            android:id="@+id/nextButton2"
+            android:layout_width="wrap_content"
+            android:layout_height="60dp"
+            android:contentDescription="Next Button"
+            android:src="@drawable/next"
             android:layout_gravity="bottom|center_horizontal"
             android:layout_marginBottom="60dp" />
 
@@ -48,6 +81,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone">
+
+<!--        <VideoView-->
+<!--            android:id="@+id/instructionVideo"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_gravity="center"/>-->
+
+        <WebView
+            android:id="@+id/instruction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
 
         <ImageView
             android:id="@+id/startButton"
@@ -113,6 +158,7 @@
                     android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="0"
+                    android:fontFamily="@font/riffic_free_bold"
                     android:textColor="#FF0000"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -138,15 +184,63 @@
                 android:visibility="gone"
                 >
 
-                <ImageView
-                    android:id="@+id/starsbanner"
-                    android:layout_width="260dp"
+                <RelativeLayout
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:adjustViewBounds="true"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/endscreenstars"
-                    android:contentDescription="Banner"
-                    />
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:layout_gravity="center"
+                    android:paddingTop="30dp">
+
+                    <!-- Arc Banner Background -->
+                    <ImageView
+                        android:id="@+id/starsbanner"
+                        android:layout_width="320dp"
+                        android:layout_height="wrap_content"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/endscreenstars"
+                        android:contentDescription="Banner" />
+
+                    <!-- Left Star -->
+                    <ImageView
+                        android:id="@+id/star1"
+                        android:layout_width="70dp"
+                        android:layout_height="70dp"
+                        android:src="@drawable/star"
+                        android:visibility="invisible"
+                        android:layout_alignTop="@id/starsbanner"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginStart="53dp"
+                        android:rotation="-20"
+                        android:layout_alignStart="@id/starsbanner" />
+
+                    <!-- Center Star -->
+                    <ImageView
+                        android:id="@+id/star2"
+                        android:layout_width="85dp"
+                        android:layout_height="85dp"
+                        android:src="@drawable/star"
+
+                        android:visibility="invisible"
+                        android:layout_alignTop="@id/starsbanner"
+                        android:layout_marginTop="-30dp"
+                        android:layout_centerHorizontal="true" />
+
+                    <!-- Right Star -->
+                    <ImageView
+                        android:id="@+id/star3"
+                        android:layout_width="70dp"
+                        android:layout_height="70dp"
+                        android:src="@drawable/star"
+                        android:visibility="invisible"
+                        android:layout_alignTop="@id/starsbanner"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginEnd="53dp"
+                        android:rotation="20"
+                        android:layout_alignEnd="@id/starsbanner" />
+                </RelativeLayout>
+
 
 
                 <ImageView
@@ -166,12 +260,12 @@
             <RelativeLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingTop="20sp"
+                android:layout_marginTop="20sp"
                 >
 
                 <ImageView
                     android:id="@+id/gamescore"
-                    android:layout_width="100dp"
+                    android:layout_width="130dp"
                     android:layout_height="wrap_content"
                     android:adjustViewBounds="true"
                     android:scaleType="fitCenter"
@@ -185,12 +279,13 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="0"
+                    android:fontFamily="@font/riffic_free_bold"
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"
                     android:layout_alignEnd="@+id/gamescore"
                     android:layout_alignBottom="@id/gamescore"
                     android:layout_marginEnd="15dp"
-                    android:layout_marginBottom="14dp"
+                    android:layout_marginBottom="6dp"
                     />
             </RelativeLayout>
 
