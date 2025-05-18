@@ -67,7 +67,9 @@ public class MainActivity extends AppCompatActivity implements
         bgmPlayer.setVolume(0.5f, 0.5f); // Optional: Set volume (left, right)
         bgmPlayer.start();
 
-        stateManager = AppStateManager.getInstance();
+        stateManager = AppStateManager.getInstance();        bgmPlayer = MediaPlayer.create(this, R.raw.v1); // Use your filename
+        bgmPlayer.setLooping(true); // Optional: Loop BGM
+        bgmPlayer.setVolume(0.5f, 0.5f); // Optional: Set volume (left, right)
         eventEmitter = EventEmitter.getInstance();
         modelLoaderManager = ModelLoaderManager.getInstance();
 
